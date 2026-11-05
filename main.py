@@ -1,3 +1,4 @@
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Request, Response, BackgroundTasks
 from pydantic import BaseModel
 import time
@@ -18,6 +19,14 @@ from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
 app = FastAPI(title="API Chatbot Dai Nam", version="1.0")
+# Cấp quyền cho giao diện Website (HTML) được phép gọi API
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Chấp nhận mọi tên miền website gọi tới
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # --- THONG TIN KET NOI FACEBOOK ---
 xacminh = "xacminh" 
@@ -103,7 +112,7 @@ chuoi_hoan_chinh = RunnableWithMessageHistory(
     history_messages_key="lich_su_chat",
 )
 
-print("✅ He thong RAG (Da tich hop Memory) san sang!")
+print("->> He thong RAG (Da tich hop Memory) san sang!")
 
 # --- CAC HAM XU LY FACEBOOK MESSENGER ---
 
@@ -179,3 +188,22 @@ async def nhan_tin_nhan_facebook(yeu_cau: Request, tac_vu_nen: BackgroundTasks):
 @app.get("/")
 async def trang_chu():
     return {"message": "Server FastAPI Chatbot Dai Nam dang hoat dong!"}
+
+
+class TinNhanWeb(BaseModel):
+    session_id: str
+    cau_hoi: str
+
+@app.post("/api/chat-web")
+async def nhan_tin_nhan_tu_web(du_lieu: TinNhanWeb):
+    try:
+        cau_tra_loi = chuoi_hoan_chinh.invoke(
+            {"cau_hoi": du_lieu.cau_hoi},
+            config={"configurable": {"session_id": du_lieu.session_id}}
+        )
+        cau_tra_loi_sach = lam_sach_markdown(cau_tra_loi)
+        
+        return {"thanh_cong": True, "cau_tra_loi": cau_tra_loi_sach}
+    except Exception as e:
+        print(f"Lỗi chat web: {e}")
+        return {"thanh_cong": False, "cau_tra_loi": "Hệ thống đang tải dữ liệu, vui lòng thử lại sau ít phút."}
